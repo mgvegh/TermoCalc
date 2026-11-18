@@ -1,6 +1,6 @@
 import type { OutputKey } from './thermoEngine'
 
-const DECIMALS: Partial<Record<OutputKey, number>> = { P: 3, T: 3, u: 3, h: 3, s: 5, x: 4 }
+const DECIMALS: Partial<Record<OutputKey, number>> = { P: 4, T: 3, u: 3, h: 3, s: 5, x: 4 }
 
 /** Formatea un valor para mostrar/copiar (punto decimal, sin separador de miles). */
 export function formatValue(key: OutputKey, value: number): string {

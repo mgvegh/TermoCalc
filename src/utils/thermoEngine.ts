@@ -4,8 +4,8 @@
  * Motor termodinámico en TypeScript puro (sin dependencias externas).
  *
  * Unidades SI de entrada/salida:
- *   P [kPa] · T [°C] · v [m³/kg] · u, h [kJ/kg] · s [kJ/kg·K] · x [-]
- * Internamente se trabaja con T en Kelvin.
+ *   P [bar] · T [°C] · v [m³/kg] · u, h [kJ/kg] · s [kJ/kg·K] · x [-]
+ * Internamente se trabaja con T en Kelvin y P en kPa (1 bar = 100 kPa).
  *
  * Modelos:
  *   - Agua  : IAPWS-IF97 (Región 1, Región 2 y Región 4).
@@ -37,7 +37,7 @@ export type Phase =
 export interface ThermoState {
   fluid: Fluid
   phase: Phase
-  /** kPa */ P: number
+  /** bar */ P: number
   /** °C */ T: number
   /** m³/kg */ v: number
   /** kJ/kg */ u: number
@@ -49,7 +49,7 @@ export interface ThermoState {
 
 export interface AirRef {
   /** °C */ T0: number
-  /** kPa */ P0: number
+  /** bar */ P0: number
 }
 
 export type ThermoResult = { ok: true; state: ThermoState } | { ok: false; error: string }
@@ -66,7 +66,7 @@ export class ThermoError extends Error {
 // ============================================================================
 
 export const PROPERTY_META: Record<OutputKey, { label: string; symbol: string; unit: string }> = {
-  P: { label: 'Presión', symbol: 'P', unit: 'kPa' },
+  P: { label: 'Presión', symbol: 'P', unit: 'bar' },
   T: { label: 'Temperatura', symbol: 'T', unit: '°C' },
   v: { label: 'Volumen específico', symbol: 'v', unit: 'm³/kg' },
   u: { label: 'Energía interna', symbol: 'u', unit: 'kJ/kg' },
@@ -558,12 +558,12 @@ function checkRange(m: RealFluidModel, T: number, P: number) {
   if (T < m.Tmin - 1e-9 || T > m.Tmax + 1e-9)
     throw new ThermoError(`${m.name}: la temperatura debe estar entre ${fmtC(m.Tmin)} y ${fmtC(m.Tmax)}.`)
   if (!(P > 0) || P > m.Pmax + 1e-9)
-    throw new ThermoError(`${m.name}: la presión debe ser mayor que 0 y menor que ${m.Pmax.toLocaleString('es-AR')} kPa.`)
+    throw new ThermoError(`${m.name}: la presión debe ser mayor que 0 y menor que ${(m.Pmax / 100).toLocaleString('es-AR')} bar.`)
 }
 
 const SAT_RANGE_MSG = (m: RealFluidModel) =>
   `${m.name}: la zona de saturación está disponible entre ${fmtC(m.Tmin)} y ${fmtC(m.TsatMax)} ` +
-  `(${m.psat(m.Tmin).toFixed(3)} – ${m.psat(m.TsatMax).toFixed(1)} kPa).`
+  `(${(m.psat(m.Tmin) / 100).toFixed(5)} – ${(m.psat(m.TsatMax) / 100).toFixed(2)} bar).`
 
 function classify(m: RealFluidModel, T: number, P: number, hint: Hint): Phase {
   if (T >= m.Tc && P >= m.Pc) return 'Fluido supercrítico'
@@ -605,7 +605,7 @@ function solveTP(m: RealFluidModel, T: number, P: number): RawState {
     const Psat = m.psat(T)
     if (P <= m.psat(m.TsatMax) && P >= m.psat(m.Tmin) && Math.abs(m.tsat(P) - T) < 0.01) {
       throw new ThermoError(
-        `P y T corresponden a la zona de saturación (Tsat = ${fmtC(m.tsat(P))} a ${P} kPa). ` +
+        `P y T corresponden a la zona de saturación (Tsat = ${fmtC(m.tsat(P))} a ${(P / 100).toFixed(4)} bar). ` +
           'En la zona bifásica P y T no son independientes: ingresá x, v, h o s como segunda propiedad.',
       )
     }
@@ -690,8 +690,8 @@ function solveTy(m: RealFluidModel, T: number, key: 'h' | 's' | 'v', val: number
 // ============================================================================
 
 const AIR = { R: 0.287, cp: 1.005, cv: 0.718 }
-// Referencia por defecto: medio a T0 = 0 °C (273.15 K) y P0 = 100 kPa (1 bar) con s0 = 0.
-const DEFAULT_AIR_REF: AirRef = { T0: 0, P0: 100 }
+// Referencia por defecto: medio a T0 = 0 °C (273.15 K) y P0 = 1 bar (100 kPa) con s0 = 0.
+const DEFAULT_AIR_REF: AirRef = { T0: 0, P0: 1 }
 
 function airEntropy(T: number, P: number, T0: number, P0: number) {
   return AIR.cp * Math.log(T / T0) - AIR.R * Math.log(P / P0)
@@ -745,7 +745,7 @@ function solveAir(a: PropKey, va: number, b: PropKey, vb: number, airRef: AirRef
 
 /**
  * Calcula el estado termodinámico a partir de dos propiedades independientes.
- * Las entradas usan: P [kPa], T [°C], v [m³/kg], h [kJ/kg], s [kJ/kg·K], x [-].
+ * Las entradas usan: P [bar], T [°C], v [m³/kg], h [kJ/kg], s [kJ/kg·K], x [-].
  */
 export function computeState(
   fluid: Fluid,
@@ -761,12 +761,17 @@ export function computeState(
     if (!isPairSupported(fluid, a, b))
       throw new ThermoError(`El par (${a}, ${b}) no está soportado para este fluido.`)
 
+    // Conversión de P de bar a kPa para el cálculo interno (1 bar = 100 kPa)
+    const vaKpa = a === 'P' ? va * 100 : va
+    const vbKpa = b === 'P' ? vb * 100 : vb
+    const airRefKpa: AirRef = { T0: airRef.T0, P0: airRef.P0 * 100 }
+
     let raw: RawState
     if (fluid === 'air') {
-      raw = solveAir(a, va, b, vb, airRef)
+      raw = solveAir(a, vaKpa, b, vbKpa, airRefKpa)
     } else {
       const m = fluid === 'water' ? WATER : R134A
-      const get = (k: PropKey) => (a === k ? va : vb)
+      const get = (k: PropKey) => (a === k ? vaKpa : vbKpa)
       const has = (k: PropKey) => a === k || b === k
       const other = (a === 'P' || a === 'T' ? b : a) as PropKey
 
@@ -783,7 +788,7 @@ export function computeState(
 
     return {
       ok: true,
-      state: { fluid, phase, P, T: T - K0, v: props.v, u: props.u, h: props.h, s: props.s, rho: 1 / props.v, x },
+      state: { fluid, phase, P: P / 100, T: T - K0, v: props.v, u: props.u, h: props.h, s: props.s, rho: 1 / props.v, x },
     }
   } catch (e) {
     if (e instanceof ThermoError) return { ok: false, error: e.message }

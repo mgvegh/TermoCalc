@@ -14,9 +14,9 @@ import {
 } from './utils/thermoEngine'
 
 const DEFAULTS: Record<Fluid, Partial<Record<PropKey, string>>> = {
-  water: { P: '100', T: '150', v: '1.5', h: '2500', s: '7', x: '0.5' },
-  r134a: { P: '800', T: '50', v: '0.03', h: '280', s: '1', x: '0.5' },
-  air: { P: '100', T: '31.85', v: '0.8754', h: '306.5', s: '0.1108' },
+  water: { P: '1', T: '150', v: '1.5', h: '2500', s: '7', x: '0.5' },
+  r134a: { P: '8', T: '50', v: '0.03', h: '280', s: '1', x: '0.5' },
+  air: { P: '1', T: '31.85', v: '0.8754', h: '306.5', s: '0.1108' },
 }
 
 const CAN_BE_NEGATIVE: PropKey[] = ['T', 'h', 's']
@@ -151,7 +151,7 @@ function CycleChart({
   const yTicks = [yMin + ySpan * 0.12, (yMin + yMax) / 2, yMax - ySpan * 0.12]
   const xTicks = [xMin + xSpan * 0.12, (xMin + xMax) / 2, xMax - xSpan * 0.12]
   const xLabel = diagram === 'Ts' ? 's [kJ/kg·K]' : diagram === 'Ph' ? 'h [kJ/kg]' : 'v [m³/kg]'
-  const yLabel = diagram === 'Ts' ? 'T [°C]' : 'P [kPa]'
+  const yLabel = diagram === 'Ts' ? 'T [°C]' : 'P [bar]'
 
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -263,7 +263,7 @@ function CycleChart({
 export default function App() {
   const [fluid, setFluid] = useState<Fluid>('water')
   const [sel, setSel] = useState<Selection>(() => initialSelection('water'))
-  const [airRef, setAirRef] = useState({ T0: '0', P0: '100' })
+  const [airRef, setAirRef] = useState({ T0: '0', P0: '1' })
   const [copiedKey, setCopiedKey] = useState<OutputKey | null>(null)
 
   const [cycle, setCycle] = useState<SavedState[]>([])
@@ -406,7 +406,7 @@ export default function App() {
       {/* Encabezado mínimo */}
       <header className="flex items-center justify-between px-0.5">
         <h1 className="text-sm font-semibold tracking-tight text-zinc-100">Termonator</h1>
-        <span className="font-mono text-[11px] text-zinc-500">SI · kPa / °C / kJ</span>
+        <span className="font-mono text-[11px] text-zinc-500">SI · bar / °C / kJ</span>
       </header>
 
       {/* Selector de fluido */}
@@ -474,7 +474,7 @@ export default function App() {
                 onChange={(e) => setAirRef((r) => ({ ...r, P0: e.target.value }))}
                 className="min-w-0 flex-1 bg-transparent font-mono text-xs tabular-nums text-zinc-100 outline-none"
               />
-              <span className="ml-1 font-mono text-[11px] text-zinc-500">kPa</span>
+              <span className="ml-1 font-mono text-[11px] text-zinc-500">bar</span>
             </label>
           </div>
         )}
